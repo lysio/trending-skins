@@ -126,15 +126,15 @@ Zweryfikowane bezpośrednio w `node_modules`, nie z poradników:
 
 Kolejność jest celowa: „zmiana nazwy tworzy drugiego workera" jest problemem do sprzątania **tylko jeśli wdrożysz wcześniej**. Zmiana nazwy przed pierwszym wdrożeniem czyni to nie-zdarzeniem. Sekrety idą po nazwie, bo są przypisane do workera.
 
-- [ ] **[A] 1.1** `wrangler.jsonc`: `"name": "trending-skins"`.
-- [ ] **[A] 1.2** `package.json`: `"name": "trending-skins"`. Opcjonalnie `supabase/config.toml` → `project_id = "trending-skins"` (wpływa tylko na nazewnictwo lokalnych kontenerów; `npx supabase start` utworzy nowy lokalny stos — stary można zatrzymać przez `npx supabase stop --project-id 10x-astro-starter`).
-- [ ] **[A] 1.3** Przebuduj i **sprawdź wygenerowaną konfigurację**:
+- [x] **[A] 1.1** `wrangler.jsonc`: `"name": "trending-skins"`.
+- [x] **[A] 1.2** `package.json`: `"name": "trending-skins"`. Opcjonalnie `supabase/config.toml` → `project_id = "trending-skins"` (wpływa tylko na nazewnictwo lokalnych kontenerów; `npx supabase start` utworzy nowy lokalny stos — stary można zatrzymać przez `npx supabase stop --project-id 10x-astro-starter`).
+- [x] **[A] 1.3** Przebuduj i **sprawdź wygenerowaną konfigurację**:
   ```powershell
   npm run build
   Get-Content ((Get-Content .wrangler\deploy\config.json | ConvertFrom-Json).configPath) | ConvertFrom-Json | Select-Object name | Format-List
   ```
   Musi pokazać `trending-skins`. Jeśli nie — edycja nie dotarła do builda.
-- [ ] **1.4 Gałąź awaryjna — stary worker już istnieje.** Workers nie ma operacji zmiany nazwy. Zmiana `name` sprawia, że następne wdrożenie **tworzy nowego workera**; stary zachowuje swój adres `10x-astro-starter.<subdomain>.workers.dev`, dalej serwuje stary bundle i trzyma własną kopię sekretów.
+- [~] **1.4 Gałąź awaryjna (NIEAKTYWNA — stary worker nigdy nie istniał) — stary worker już istnieje.** Workers nie ma operacji zmiany nazwy. Zmiana `name` sprawia, że następne wdrożenie **tworzy nowego workera**; stary zachowuje swój adres `10x-astro-starter.<subdomain>.workers.dev`, dalej serwuje stary bundle i trzyma własną kopię sekretów.
   - [ ] **[A]** `npx wrangler deployments list --name 10x-astro-starter`
   - [ ] **[A]** `npx wrangler tail --name 10x-astro-starter --format json` przez ~60 s — potwierdź, że nie odbiera nic istotnego
   - [ ] **[H]** `npx wrangler delete --name 10x-astro-starter` — operacja niszcząca, tylko człowiek. Usuwa też jego sekrety.
