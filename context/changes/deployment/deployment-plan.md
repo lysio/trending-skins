@@ -84,26 +84,26 @@ Zweryfikowane bezpośrednio w `node_modules`, nie z poradników:
 
 *Wejście:* nic nie wdrożone. *Wyjście:* repozytorium pod kontrolą wersji, wersje przypięte, czysty build, znany kształt wygenerowanej konfiguracji.
 
-- [ ] **[A] 0.1** Potwierdź, że żaden worker jeszcze nie istnieje:
+- [x] **[A] 0.1** Potwierdź, że żaden worker jeszcze nie istnieje:
   ```powershell
   npx wrangler whoami
   npx wrangler deployments list --name 10x-astro-starter
   npx wrangler deployments list --name trending-skins
   ```
   Oba `deployments list` powinny zgłosić „worker not found". **Jeśli `10x-astro-starter` istnieje** → najpierw gałąź 1.4.
-- [ ] **[A] 0.2** `git init -b master` (CI celuje w `master`), `git add -A`, pierwszy commit. Katalog **nie jest** repozytorium gita — `.github/workflows/ci.yml` to dziś martwy tekst, a haki husky nigdy się nie uruchomiły.
-- [ ] **[A] 0.3** Uzupełnij `.gitignore` przed pierwszym commitem: `.dev.vars.*` (wzorzec pokrywa dziś tylko dokładne `.dev.vars`) oraz `worker-configuration.d.ts`.
-- [ ] **[A] 0.4** **Przypnij kruche zależności dokładnie**, zgodnie z rejestrem ryzyk: `@supabase/ssr` `^0.12.7` → `0.12.7`, `@supabase/supabase-js` `^2.99.1` → `2.116.0` (wersja faktycznie zainstalowana — daszek pozwala dziś na cichy skok przy następnym `npm ci`). Potem `npm install`, żeby przepisać lockfile, i commit. To najważniejsza linijka tej fazy: sekcja zwłok w `infrastructure.md` opisuje dokładnie ten scenariusz.
-- [ ] **[A] 0.5** `npm run build` bez sekretów — musi przejść (`optional: true`).
-- [ ] **[A] 0.6** Przeczytaj wygenerowaną konfigurację i zapamiętaj ścieżkę:
+- [x] **[A] 0.2** `git init -b master` (CI celuje w `master`), `git add -A`, pierwszy commit. Katalog **nie jest** repozytorium gita — `.github/workflows/ci.yml` to dziś martwy tekst, a haki husky nigdy się nie uruchomiły.
+- [x] **[A] 0.3** Uzupełnij `.gitignore` przed pierwszym commitem: `.dev.vars.*` (wzorzec pokrywa dziś tylko dokładne `.dev.vars`) oraz `worker-configuration.d.ts`.
+- [x] **[A] 0.4** **Przypnij kruche zależności dokładnie**, zgodnie z rejestrem ryzyk: `@supabase/ssr` `^0.12.7` → `0.12.7`, `@supabase/supabase-js` `^2.99.1` → `2.116.0` (wersja faktycznie zainstalowana — daszek pozwala dziś na cichy skok przy następnym `npm ci`). Potem `npm install`, żeby przepisać lockfile, i commit. To najważniejsza linijka tej fazy: sekcja zwłok w `infrastructure.md` opisuje dokładnie ten scenariusz.
+- [x] **[A] 0.5** `npm run build` bez sekretów — musi przejść (`optional: true`).
+- [x] **[A] 0.6** Przeczytaj wygenerowaną konfigurację i zapamiętaj ścieżkę:
   ```powershell
   Get-Content .wrangler\deploy\config.json
   $cfg = (Get-Content .wrangler\deploy\config.json | ConvertFrom-Json).configPath
   Get-Content $cfg | ConvertFrom-Json | Select-Object name,main,compatibility_date,compatibility_flags | Format-List
   ```
   Na tym etapie `name` to wciąż `10x-astro-starter`. **Nie wdrażaj.**
-- [ ] **[A] 0.7** `npx wrangler types` → generuje `worker-configuration.d.ts` z interfejsem `Env`.
-- [ ] **[A] 0.8** Dopisz typowanie runtime'u Cloudflare do `src/env.d.ts` (dziś deklaruje tylko `App.Locals.user`, więc `locals.runtime` jest nietypowane):
+- [x] **[A] 0.7** `npx wrangler types` → generuje `worker-configuration.d.ts` z interfejsem `Env`.
+- [x] **[A] 0.8** Dopisz typowanie runtime'u Cloudflare do `src/env.d.ts` (dziś deklaruje tylko `App.Locals.user`, więc `locals.runtime` jest nietypowane):
   ```ts
   /// <reference types="../worker-configuration.d.ts" />
   type CfRuntime = import("@astrojs/cloudflare").Runtime<Env>;
@@ -113,8 +113,8 @@ Zweryfikowane bezpośrednio w `node_modules`, nie z poradników:
     }
   }
   ```
-- [ ] **[A] 0.9** `npx astro check` i `npm run lint` — czysto.
-- [ ] **[A] 0.10** Ten plan leży już w `context/changes/deployment/deployment-plan.md` — potwierdź, że jest w repozytorium i objęty pierwszym commitem.
+- [x] **[A] 0.9** `npx astro check` i `npm run lint` — czysto.
+- [x] **[A] 0.10** Ten plan leży już w `context/changes/deployment/deployment-plan.md` — potwierdź, że jest w repozytorium i objęty pierwszym commitem.
 
 **Gotowe, gdy:** build + `astro check` + lint zielone; `git log` ma commit; `.wrangler/deploy/config.json` przeczytany; na Cloudflare nadal nic nie ma.
 
