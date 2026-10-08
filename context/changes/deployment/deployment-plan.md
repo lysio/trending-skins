@@ -237,7 +237,7 @@ Ta faza idzie **przed** pierwszym wdrożeniem celowo. `optional: true` znaczy, �
 
   **Drugie potknięcie (2026-10-08):** `wrangler deploy` padł na `/storage/kv/namespaces` — token nie ma uprawnień do KV, i dobrze. Źródło: `@astrojs/cloudflare` 14.3.1 **sam dokleja** do wygenerowanego `wrangler.json` wiązanie `SESSION` (KV, domyślny sterownik Astro Sessions), a wrangler 4 próbuje je **automatycznie utworzyć** przy deployu. Do tego wiązanie `IMAGES` (Cloudflare Images, domyślny `imageService: "cloudflare-binding"`). Aplikacja nie używa ani sesji Astro, ani `astro:assets`, więc w `astro.config.mjs`: `session: false` + `cloudflare({ imageService: "passthrough" })`. Po przebudowie `kv_namespaces: []`, brak `images`; `astro check` 0 błędów, lint czysty. Przy okazji domyka to kontrakt budżetowy — ani KV, ani Images nie wchodzą do projektu bez osobnej decyzji.
 - [x] **[A] 3.3** Sprawdź podgląd: `/api/health` musi zwrócić **503** z `configured:false`. To potwierdza, że detektor działa na produkcji. **Wynik (2026-10-08, V1 `9524a0fb-f21b-462e-a27a-6dbaa357c8d3`, wdrożona przez człowieka `wrangler deploy` — na produkcji, nie na podglądzie, patrz 3.2):** `/` = 200 z czerwonym banerem „Supabase nie jest skonfigurowany" · `/api/health` = **503** `{"ok":false,"supabase":{"configured":false,"reachable":null}}` · `/dashboard` = 302 → `/auth/signin`.
-- [ ] **[H] 3.4 Ustaw sekrety — tylko człowiek, we własnym terminalu.** Projekt **produkcyjny** Supabase (nie staging `lqwpdqwptujpoxcogiwb`); URL i publishable/anon key.
+- [x] **[H] 3.4 Ustaw sekrety — tylko człowiek, we własnym terminalu.** Projekt **produkcyjny** Supabase (nie staging `lqwpdqwptujpoxcogiwb`); URL i publishable/anon key.
   ```powershell
   npx wrangler versions secret put SUPABASE_URL --name trending-skins
   npx wrangler versions secret put SUPABASE_KEY --name trending-skins
@@ -246,7 +246,7 @@ Ta faza idzie **przed** pierwszym wdrożeniem celowo. `optional: true` znaczy, �
   **Poprawka (zweryfikowane w kodzie wranglera 4.131.1, 2026-10-08):** pierwotna wersja tego kroku używała `wrangler secret put` — to **się wywraca**. Po 3.2 najnowsza wersja nie jest wdrożona, a `secret put` celowo odmawia wtedy działania (`VERSION_NOT_DEPLOYED`: *„use `wrangler versions secret put` instead"*), bo zwykłe `secret put` tworzy wersję **i ją wdraża**. `versions secret put` tworzy nową wersję (ten sam bundle + sekret) **bez** wdrożenia. Każde wywołanie to osobna wersja — po dwóch mamy V3 z obydwoma sekretami.
 
   `--name` nie jest kosmetyką — broni przed przekierowaniem konfiguracji z §2 kontekstu.
-- [ ] **[A] 3.5 Zweryfikuj podgląd NOWEJ wersji, BEZ przebudowy:**
+- [x] **[A] 3.5 Zweryfikuj podgląd NOWEJ wersji, BEZ przebudowy:**
   ```powershell
   curl.exe -s -o NUL -w "%{http_code}`n" https://<8-znaków-ID>-trending-skins.lysiog16.workers.dev/
   curl.exe -s https://<8-znaków-ID>-trending-skins.lysiog16.workers.dev/api/health
@@ -255,7 +255,9 @@ Ta faza idzie **przed** pierwszym wdrożeniem celowo. `optional: true` znaczy, �
   **Poprawka:** sekrety są częścią **wersji**, nie workera. Alias `pre` zostaje przypięty do V1 (bez sekretów) i dalej dawałby 503. Sprawdza się adres podglądu wersji z sekretami — prefiks to pierwsze 8 znaków jej Version ID.
 
   **Bramka: `/api/health` musi zwrócić 200 z `configured:true, reachable:true`.**
-- [ ] **[A] 3.6 Rozstrzygnij empirycznie „sekrety w buildzie czy w runtime" — raz, i zapisz wynik.** Przejście 3.3 (503 na V1) → 3.5 (200 na V3) przy **tym samym bundlu, bez przebudowy** jest już dowodem rozwiązywania w runtime. Domknij to testem rotacji:
+
+  **Wynik (2026-10-08):** V2 `9d1e6688` (tylko `SUPABASE_URL`) → `/api/health` 503 `configured:false`, baner widoczny. V3 `5555cb82-15b2-4e90-a8ac-7f9a56f91aff` (oba sekrety) → `/` 200 bez banera · `/api/health` **200** `{"ok":true,"supabase":{"configured":true,"reachable":true}}` · `/dashboard` 302 → `/auth/signin`. Produkcja (V1) w tym czasie bez zmian: 503 — `versions secret put` faktycznie nie wdraża.
+- [x] **[A] 3.6 Rozstrzygnij empirycznie „sekrety w buildzie czy w runtime" — raz, i zapisz wynik.** Przejście 3.3 (503 na V1) → 3.5 (200 na V3) przy **tym samym bundlu, bez przebudowy** jest już dowodem rozwiązywania w runtime. Domknij to testem rotacji:
   1. **[H]** `versions secret put SUPABASE_KEY` z celowo błędną wartością → V4.
   2. **[A]** Podgląd V4: `/api/health` musi dać `reachable:false`.
   3. **[H]** `versions secret put SUPABASE_KEY` z poprawną wartością → V5; **[A]** podgląd V5 = 200.
@@ -263,14 +265,16 @@ Ta faza idzie **przed** pierwszym wdrożeniem celowo. `optional: true` znaczy, �
   Krok 3 **nie jest opcjonalny**: kolejne wdrożenia dziedziczą sekrety z poprzednich wersji — gdyby najnowsza wersja niosła zły klucz, Workers Builds mógłby go przenieść na produkcję. Promujemy V5, nie V3 — wtedy najnowsza wersja = wdrożona, i zwykłe `secret put` znów działa przy przyszłych rotacjach.
 
   Jeśli krok 2 **nie** przeskoczy, wiersz rejestru ryzyk „rotacja sekretu wymaga przebudowania" jest potwierdzony i każda rotacja staje się `build + versions upload + versions deploy`. Zapisz obserwowany wynik w `deployment-plan.md` — nie przenoś założenia dalej.
-- [ ] **[H] 3.7 NIE uruchamiaj `npm run smoke` przeciw produkcji.** Skrypt woła `POST /api/auth/signup` z `smoke-<timestamp>@example.com` i tworzy **prawdziwy wiersz w `auth.users`**, a przechodzi tylko przy wyłączonym potwierdzaniu e-maila — czego na produkcji nie chcesz. Zamiast tego **sonda tylko do odczytu** jako produkcyjny test akceptacyjny: trzy wywołania `curl.exe` z 3.5 (`/` = 200, `/api/health` = 200, `/dashboard` = 302 → `/auth/signin`). Zero zapisów, zero autoryzacji. Pełny smoke zostaje tam, gdzie jest: lokalny Supabase + `wrangler dev` (2.5) i job `smoke` w CI. Gdybyś kiedyś potrzebował pokrycia przepływu autoryzacji przeciw hostowanemu Supabase — osobny projekt stagingowy, nigdy produkcyjny.
-- [ ] **[H] 3.8 Promuj — przesunięcie ruchu produkcyjnego.**
+
+  **Wynik (2026-10-08) — ROZSTRZYGNIĘTE: sekrety `astro:env` rozwiązują się w runtime.** Ten sam bundle bez przebudowy: V1 `9524a0fb` 503 `configured:false` → V3 `5555cb82` 200. Rotacja: V4 `f3eb8e16` (celowo zły `SUPABASE_KEY`) → `/api/health` **503** `{"configured":true,"reachable":false}`; V5 `4dfecc84-fa82-42b8-81a8-6462dcb3633c` (klucz przywrócony) → **200** `reachable:true`, `/` 200 bez banera, `/dashboard` 302, `/auth/signin` 200. Wiersz rejestru „rotacja sekretu wymaga przebudowania" — **obalony**: rotacja = `versions secret put` + `versions deploy`, bez builda. Projekt produkcyjny Supabase: `wuboridtwewsqzctutss` (publishable key zweryfikowany bezpośrednio wobec `/auth/v1/health` = 200).
+- [x] **[H] 3.7 NIE uruchamiaj `npm run smoke` przeciw produkcji.** Skrypt woła `POST /api/auth/signup` z `smoke-<timestamp>@example.com` i tworzy **prawdziwy wiersz w `auth.users`**, a przechodzi tylko przy wyłączonym potwierdzaniu e-maila — czego na produkcji nie chcesz. Zamiast tego **sonda tylko do odczytu** jako produkcyjny test akceptacyjny: trzy wywołania `curl.exe` z 3.5 (`/` = 200, `/api/health` = 200, `/dashboard` = 302 → `/auth/signin`). Zero zapisów, zero autoryzacji. Pełny smoke zostaje tam, gdzie jest: lokalny Supabase + `wrangler dev` (2.5) i job `smoke` w CI. Gdybyś kiedyś potrzebował pokrycia przepływu autoryzacji przeciw hostowanemu Supabase — osobny projekt stagingowy, nigdy produkcyjny. **Przestrzegane:** przeciw produkcji biegły wyłącznie sondy GET (curl), żadnego signupu.
+- [x] **[H] 3.8 Promuj — przesunięcie ruchu produkcyjnego.** **Wykonano 2026-10-08 12:39 UTC (człowiek):** V5 `4dfecc84-fa82-42b8-81a8-6462dcb3633c` na 100%.
   ```powershell
   npx wrangler versions list --name trending-skins
   npx wrangler versions deploy <ID-V5>@100% --name trending-skins
   ```
-- [ ] **[A] 3.9 Zweryfikuj produkcję** tymi samymi trzema sondami przeciw `https://trending-skins.lysiog16.workers.dev`, plus `npx wrangler deployments list` pokazujący oczekiwaną wersję na 100%.
-- [ ] **[A] 3.10** Ustaw `site: "https://trending-skins.lysiog16.workers.dev"` w `astro.config.mjs`. `sitemap()` jest dziś włączony **bez** `site`, więc tylko ostrzega i nie emituje nic użytecznego. Przebuduj.
+- [x] **[A] 3.9 Zweryfikuj produkcję** tymi samymi trzema sondami przeciw `https://trending-skins.lysiog16.workers.dev`, plus `npx wrangler deployments list` pokazujący oczekiwaną wersję na 100%. **Wynik:** `/` 200 bez banera · `/api/health` **200** `{"ok":true,"supabase":{"configured":true,"reachable":true}}` · `/dashboard` 302 → `/auth/signin` · `deployments list`: najnowsze wdrożenie = V5 @ 100% (poprzednie: V1 @ 100%).
+- [x] **[A] 3.10** Ustaw `site: "https://trending-skins.lysiog16.workers.dev"` w `astro.config.mjs`. `sitemap()` jest dziś włączony **bez** `site`, więc tylko ostrzega i nie emituje nic użytecznego. Przebuduj. **Wykonano:** build emituje `sitemap-index.xml` + `sitemap-0.xml`; `astro check` 0 błędów, lint czysty. **Jeszcze niewdrożone** — zmiana trafi na produkcję z najbliższym wdrożeniem (pierwszy build Workers Builds w Fazie 4 albo ręczne `cf:preview` → `versions deploy`).
 - [ ] **3.11 Gałąź awaryjna — wycofanie.**
   ```powershell
   npx wrangler deployments list --name trending-skins
@@ -280,6 +284,8 @@ Ta faza idzie **przed** pierwszym wdrożeniem celowo. `optional: true` znaczy, �
 - [ ] **3.12 Gałąź awaryjna — `No such module` / nierozwiązany `virtual:astro-cloudflare:config` przy wdrożeniu.** Wdrożyłeś bez budowania albo `main` wskazuje coś, czego build Astro nie przetworzył. `npm run build`, ponów.
 
 **Gotowe, gdy:** produkcyjny `/api/health` = 200 `{configured:true,reachable:true}`; `/` = 200 bez czerwonego banera; `/dashboard` = 302; `deployments list` pokazuje jedną wersję na 100%; odpowiedź z 3.6 zapisana w pliku planu.
+
+**Faza 3 ZAMKNIĘTA (2026-10-08).** Produkcja: `https://trending-skins.lysiog16.workers.dev`, V5 na 100%, Supabase `wuboridtwewsqzctutss`. Trzy odstępstwa od pierwotnego planu, wszystkie opisane wyżej: (1) pierwsza wersja musiała pójść przez `wrangler deploy` prosto na produkcję, bo `versions upload` nie tworzy workera; (2) `versions secret put` zamiast `secret put` i podgląd per wersja zamiast aliasu `pre`; (3) wyłączone wiązania `SESSION`/`IMAGES` w adapterze.
 
 ---
 
