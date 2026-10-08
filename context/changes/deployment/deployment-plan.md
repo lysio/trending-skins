@@ -41,8 +41,8 @@ Dokumentacja jest jednoznaczna: *„If you exceed any one of these limits, furth
 
 ### Trzy bariery, które trzeba postawić
 
-- [ ] **[H] B.1 Nie dodawaj metody płatności do Cloudflare.** Konto bez karty nie może przejść na plan płatny przypadkiem. Sprawdź: **Manage Account → Billing → Payment Info** — powinno być puste. To jest właściwe zabezpieczenie, a nie dyscyplina.
-- [ ] **[H] B.2 Potwierdź, że limit wydatków GitHuba to 0 USD** (Settings → Billing → Spending limit). To wartość domyślna dla kont rozliczanych miesięcznie; potwierdź ją, bo po jej podniesieniu nadmiarowe minuty **są** fakturowane.
+- [x] **[H] B.1 Nie dodawaj metody płatności do Cloudflare.** Konto bez karty nie może przejść na plan płatny przypadkiem. Sprawdź: **Manage Account → Billing → Payment Info** — powinno być puste. To jest właściwe zabezpieczenie, a nie dyscyplina.
+- [x] **[H] B.2 Potwierdź, że limit wydatków GitHuba to 0 USD** (Settings → Billing → Spending limit). To wartość domyślna dla kont rozliczanych miesięcznie; potwierdź ją, bo po jej podniesieniu nadmiarowe minuty **są** fakturowane.
 - [ ] **[A] B.3 Pilnuj budżetu minut GitHub Actions.** Job `smoke` startuje lokalne Supabase w Dockerze — to najdroższy job w repozytorium, realnie kilka minut na uruchomienie. Przy 2 000 minut miesięcznie i repozytorium prywatnym liczy się każda harmonogramowana pętla. Konkretna konsekwencja dla tego planu: **sonda `verify-production` biegnie raz na dobę, nie co godzinę** (krok 4.11). Godzinowa to 720 uruchomień miesięcznie; dobowa to 30. Jeśli kiedykolwiek zabraknie minut — CI się zatrzyma, nic nie zostanie naliczone, a najprostszym wyjściem jest przełączenie repozytorium na publiczne (wtedy Actions są nielimitowane).
 
 ### Czego ten plan świadomie NIE robi
@@ -98,9 +98,10 @@ Zweryfikowane bezpośrednio w `node_modules`, nie z poradników:
 - [x] **[A] 0.6** Przeczytaj wygenerowaną konfigurację i zapamiętaj ścieżkę:
   ```powershell
   Get-Content .wrangler\deploy\config.json
-  $cfg = (Get-Content .wrangler\deploy\config.json | ConvertFrom-Json).configPath
-  Get-Content $cfg | ConvertFrom-Json | Select-Object name,main,compatibility_date,compatibility_flags | Format-List
+  Get-Content dist\server\wrangler.json | ConvertFrom-Json | Select-Object name,main,compatibility_date,compatibility_flags | Format-List
   ```
+  **Uwaga (zweryfikowane 2026-10-02):** `configPath` w `.wrangler\deploy\config.json` jest **względny wobec katalogu tego pliku** (`..\..\dist\server\wrangler.json`). Podanie go wprost do `Get-Content` rozwija się na `C:\dist\server\wrangler.json` i pada `PathNotFound`. Czytaj docelowy plik bezpośrednio albo rozwiąż ścieżkę przez `Resolve-Path` względem `.wrangler\deploy\`.
+
   Na tym etapie `name` to wciąż `10x-astro-starter`. **Nie wdrażaj.**
 - [x] **[A] 0.7** `npx wrangler types` → generuje `worker-configuration.d.ts` z interfejsem `Env`.
 - [x] **[A] 0.8** Dopisz typowanie runtime'u Cloudflare do `src/env.d.ts` (dziś deklaruje tylko `App.Locals.user`, więc `locals.runtime` jest nietypowane):
@@ -131,7 +132,7 @@ Kolejność jest celowa: „zmiana nazwy tworzy drugiego workera" jest problemem
 - [x] **[A] 1.3** Przebuduj i **sprawdź wygenerowaną konfigurację**:
   ```powershell
   npm run build
-  Get-Content ((Get-Content .wrangler\deploy\config.json | ConvertFrom-Json).configPath) | ConvertFrom-Json | Select-Object name | Format-List
+  Get-Content dist\server\wrangler.json | ConvertFrom-Json | Select-Object name | Format-List
   ```
   Musi pokazać `trending-skins`. Jeśli nie — edycja nie dotarła do builda.
 - [~] **1.4 Gałąź awaryjna (NIEAKTYWNA — stary worker nigdy nie istniał) — stary worker już istnieje.** Workers nie ma operacji zmiany nazwy. Zmiana `name` sprawia, że następne wdrożenie **tworzy nowego workera**; stary zachowuje swój adres `10x-astro-starter.<subdomain>.workers.dev`, dalej serwuje stary bundle i trzyma własną kopię sekretów.
@@ -150,13 +151,20 @@ Kolejność jest celowa: „zmiana nazwy tworzy drugiego workera" jest problemem
 
 Ta faza idzie **przed** pierwszym wdrożeniem celowo. `optional: true` znaczy, że całkowicie nieskonfigurowany worker zwraca na `/` **HTTP 200** — bez tego kroku weryfikacja Fazy 3 jest bezwartościowa.
 
-- [ ] **[A] 2.1** Utwórz `.dev.vars` (PowerShell: `Copy-Item .env.example .dev.vars`, nie `cp`). Wypełnij z lokalnego Supabase:
+- [x] **[A] 2.1** Utwórz `.dev.vars` (PowerShell: `Copy-Item .env.example .dev.vars`, nie `cp`). Wypełnij z lokalnego Supabase:
   ```powershell
   npx supabase start
   npx supabase status -o env | Select-String '^(API_URL|ANON_KEY)='
   ```
   Wymaga Dockera i ~7 GB RAM. (Alternatywa: użyj poświadczeń hostowanego projektu, ale wtedy smoke test z 2.6 tworzy prawdziwych użytkowników — patrz 3.7.)
-- [ ] **[A] 2.2** Dodaj `src/pages/api/health.ts` — mechanizm głośnej awarii:
+
+  **Wykonano inaczej, świadomie (2026-10-02).** Docker Desktop nie jest zainstalowany na tej maszynie (WSL2 — Ubuntu 24.04 — jest, Supabase CLI 2.117.0 też), a wolnej pamięci było 6,9 GB wobec ~7 GB wymaganych przez lokalny stos. Zamiast lokalnego Supabase użyto **osobnego, darmowego projektu stagingowego** `lqwpdqwptujpoxcogiwb` — ścieżki, którą krok 3.7 wskazuje jako właściwą dla pokrycia przepływu autoryzacji przeciw hostowanemu Supabase. Konsekwencje do zapamiętania:
+  - Użytkownicy `smoke-<timestamp>@example.com` lądują w `auth.users` **stagingu**, nie produkcji. Warto je okresowo czyścić.
+  - W stagingu wyłączono potwierdzanie e-maila (`mailer_autoconfirm: true`). **Na produkcji ma zostać włączone** — patrz 3.7.
+  - Projekt stagingowy zajmuje drugi z dwóch darmowych slotów Supabase i pauzuje po ~7 dniach bezczynności (patrz 5.6).
+  - Klucz ma nowy format `sb_publishable_*`, nie starszy anon-JWT. Działa z `@supabase/ssr` 0.12.7 / `supabase-js` 2.116.0 — zweryfikowane smoke'iem 8/8.
+  - Docker wróci jako realna potrzeba dopiero przy pierwszej migracji schematu; dziś `supabase/` ma tylko `config.toml`.
+- [x] **[A] 2.2** Dodaj `src/pages/api/health.ts` — mechanizm głośnej awarii:
   ```ts
   import type { APIRoute } from "astro";
   import { SUPABASE_URL, SUPABASE_KEY } from "astro:env/server";
@@ -180,29 +188,36 @@ Ta faza idzie **przed** pierwszym wdrożeniem celowo. `optional: true` znaczy, �
   };
   ```
   Dlaczego to, a nie sam baner: `src/lib/config-status.ts` wylicza `missingConfigs` **na poziomie modułu**, więc czerwony baner jest zapiekany per izolat i jest dobrym sygnałem **dla człowieka** — ale to HTML ze statusem 200. `/api/health` daje nie-200, które da się sprawdzić jednolinijkowcem w CI i w monitoringu, i rozróżnia „nieskonfigurowany" od „skonfigurowany, ale Supabase leży".
-- [ ] **[A] 2.3** Uruchom prawdziwy workerd na zbudowanym bundlu:
+- [x] **[A] 2.3** Uruchom prawdziwy workerd na zbudowanym bundlu:
   ```powershell
   npm run build
   npx wrangler dev --port 8787
   ```
   `wrangler dev` korzysta z **przekierowanej** zbudowanej konfiguracji, więc to najbliższy lokalny odpowiednik produkcji — bliższy niż `npm run dev` (port 4321, serwer Vite).
-- [ ] **[A] 2.4** Weryfikacja ręczna (**w PowerShell 5.1 `curl` to alias `Invoke-WebRequest` — pisz `curl.exe`**):
+- [x] **[A] 2.4** Weryfikacja ręczna (**w PowerShell 5.1 `curl` to alias `Invoke-WebRequest` — pisz `curl.exe`**):
   ```powershell
   curl.exe -s -o NUL -w "%{http_code}`n" http://localhost:8787/
   curl.exe -s http://localhost:8787/api/health
   curl.exe -s -o NUL -w "%{http_code} %{redirect_url}`n" http://localhost:8787/dashboard
   ```
   Oczekiwane: `200`, `{"ok":true,...}`, `302 .../auth/signin`.
-- [ ] **[A] 2.5** Smoke test przeciw `wrangler dev` + lokalny Supabase:
+- [x] **[A] 2.5** Smoke test przeciw `wrangler dev` + lokalny Supabase:
   ```powershell
   $env:BASE_URL="http://localhost:8787"; npm run smoke
   ```
   Wymaga wyłączonego potwierdzania e-maila (`supabase/config.toml` → `[auth.email] enable_confirmations = false`). 8/8 kroków PASS.
-- [ ] **[A] 2.6 Test negatywny — ten, który nadaje sens Fazie 3.** Usuń `.dev.vars`, przebuduj, uruchom ponownie. `/api/health` musi zwrócić **503** z `configured:false`, a `/` wyrenderować czerwony baner. Przywróć `.dev.vars`.
-- [ ] **2.7 Gałąź awaryjna — `dynamic require of "stream" is not supported`** (kształt supabase#37592, zgłoszenie zamknięte, rozwiązaniem było `nodejs_compat`). Sprawdź, czy `compatibility_flags` w **wygenerowanym** `wrangler.json` nadal zawiera `nodejs_compat`. Jeśli tak, a błąd trwa: `npm ls @supabase/ssr` (czy nic nie podniosło innej wersji). **Nie próbuj naprawiać przez podbicie wersji** — przypnij mocniej i odtwórz w izolacji.
+- [x] **[A] 2.6 Test negatywny — ten, który nadaje sens Fazie 3.** Usuń `.dev.vars`, przebuduj, uruchom ponownie. `/api/health` musi zwrócić **503** z `configured:false`, a `/` wyrenderować czerwony baner. Przywróć `.dev.vars`.
+- [x] **2.7 Gałąź awaryjna — `dynamic require of "stream" is not supported`** (kształt supabase#37592, zgłoszenie zamknięte, rozwiązaniem było `nodejs_compat`). Sprawdź, czy `compatibility_flags` w **wygenerowanym** `wrangler.json` nadal zawiera `nodejs_compat`. Jeśli tak, a błąd trwa: `npm ls @supabase/ssr` (czy nic nie podniosło innej wersji). **Nie próbuj naprawiać przez podbicie wersji** — przypnij mocniej i odtwórz w izolacji.
 - [ ] **2.8 Gałąź awaryjna — `wrangler dev` nie widzi sekretów.** Plugin kopiuje `.dev.vars` do katalogu wyjściowego workera **w czasie budowania**. `.dev.vars` zmienione po ostatnim buildzie nie zostanie podchwycone — przebuduj. (Uwaga uboczna: build kopiuje Twoje lokalne poświadczenia do `dist/`. `dist/` jest ignorowane przez gita, ale nigdy nie publikuj go jako artefaktu.)
+- [ ] **2.9 Gałąź awaryjna — `npm run build` pada na `EPERM, Permission denied: dist\client`** (zaobserwowane 2026-10-02). Przyczyna nie ma nic wspólnego z uprawnieniami: działający `wrangler dev` trzyma uchwyt na `dist\client`, a Astro czyści ten katalog na starcie builda. Objaw dodatkowy: `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`. **Zatrzymanie serwera przed każdym `npm run build` jest warunkiem, nie higieną.** Namierzenie winowajcy:
+  ```powershell
+  Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like '*wrangler*' } | Select-Object ProcessId,CommandLine
+  ```
+  To samo dotyczy Workers Builds tylko teoretycznie — każdy build startuje tam w świeżym kontenerze.
 
 **Gotowe, gdy:** `/api/health` = 200 `configured:true`; smoke 8/8; test negatywny 2.6 wykonany i daje 503.
+
+**Wynik (2026-10-02, staging `lqwpdqwptujpoxcogiwb`, `wrangler dev` na :8787):** `/` = 200 bez banera · `/api/health` = **200** `{"ok":true,"supabase":{"configured":true,"reachable":true}}` · `/dashboard` = 302 → `/auth/signin` · **smoke 8/8 PASS** · test negatywny w pełnym cyklu (sekrety → usunięcie → przebudowa → **503** `configured:false` + czerwony baner → przywrócenie → 200) · wygenerowany `wrangler.json`: `name: trending-skins`, `compatibility_flags: ["nodejs_compat"]`.
 
 ---
 
