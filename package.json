@@ -10,7 +10,14 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "check": "astro check",
+    "prepare": "husky",
+    "cf:types": "wrangler types",
+    "cf:dev": "wrangler dev --port 8787",
+    "cf:preview": "npm run build && wrangler versions upload --preview-alias pre",
+    "cf:tail": "wrangler tail --name trending-skins --format json",
+    "cf:deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.10",
