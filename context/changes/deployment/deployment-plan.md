@@ -420,8 +420,21 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
   3. otwórz ten adres, sprawdź `/api/health` = 200;
   4. merge do `master` → build produkcyjny → nowa wersja w Version History, awansowana na Active Deployment;
   5. uruchom `verify-production` ręcznie (`workflow_dispatch`) — musi przejść.
+
+  **Przebieg (2026-10-08, PR #1, gałąź `chore/e2e-workers-builds`):** `ci` ✅, `smoke` ✅, Workers Builds ✅ (build + wdrożenie podglądu), komentarz z adresem `https://chore-e2e-workers-builds-trending-skins.lysiog16.workers.dev` ✅ — co potwierdza też 4.7. **Ale podgląd zwrócił `/api/health` 503 `configured:false`.**
+
+  **Odkrycie: podglądy Workers Builds to nie wersje workera, tylko osobny mechanizm „Worker Previews” (private beta) z własnym magazynem sekretów.** Nie dziedziczą sekretów produkcji (`wrangler versions view <id-podglądu>` → „version not found”). Sekrety wspólne dla wszystkich podglądów żyją w **Preview base config**:
+
+  ```powershell
+  npx wrangler preview base-config secret put SUPABASE_URL --worker-name trending-skins
+  npx wrangler preview base-config secret put SUPABASE_KEY --worker-name trending-skins
+  npx wrangler preview base-config secret list --worker-name trending-skins
+  ```
+
+  Ustawione przez człowieka na **staging** `lqwpdqwptujpoxcogiwb` (nie produkcję — zgodnie z 3.7: podglądy mogą tworzyć użytkowników testowych). Działają dopiero od **następnego** wdrożenia podglądu — istniejący podgląd dalej daje 503. Per-gałąź można je nadpisać `wrangler preview secret put <KEY> --name <gałąź> --worker-name trending-skins`.
+
 - [ ] **4.13 Gałąź awaryjna — build przechodzi, wdrożenie pada na niezgodności nazw.** Objaw: log budowania kończy się błędem na `wrangler deploy` przy kroku rozwiązywania workera. Przyczyna: `name` w `wrangler.jsonc` ≠ nazwa workera w panelu. Nie zmieniaj nazwy w panelu (utworzysz drugiego workera — patrz 1.4); popraw `wrangler.jsonc`.
-- [ ] **4.14 Gałąź awaryjna — build przechodzi, `/api/health` zwraca 503 `configured:false`.** Sekrety workera zniknęły albo nigdy nie dotarły. **Sekrety GitHuba, build variables Workers Builds i sekrety workera to trzy różne magazyny** — tylko ostatni liczy się w runtime. `npx wrangler secret list --name trending-skins`, potem 3.4. Natychmiastowe cofnięcie: `npx wrangler rollback --name trending-skins`.
+- [ ] **4.14 Gałąź awaryjna — build przechodzi, `/api/health` zwraca 503 `configured:false`.** Sekrety workera zniknęły albo nigdy nie dotarły. **Sekrety GitHuba, build variables Workers Builds, sekrety workera i sekrety podglądów (Preview base config, patrz 4.12) to cztery różne magazyny** — w runtime produkcji liczą się tylko sekrety workera, w runtime podglądów tylko Preview base config. `npx wrangler secret list --name trending-skins`, potem 3.4. Natychmiastowe cofnięcie: `npx wrangler rollback --name trending-skins`.
 - [ ] **4.15 Gałąź awaryjna — nic się nie wdraża po merge'u.** Kolejność sprawdzania: (a) gałąź produkcyjna w Workers Builds ustawiona na `master`, nie `main` (najczęstsza przyczyna); (b) aplikacja GitHub ma dostęp do tego repozytorium; (c) log budowania w **Settings → Builds → History** — szukaj błędu Node'a z 4.4.
 - [ ] **4.16 Gałąź awaryjna — wdrożenie wysokiego ryzyka.** Ścieżka ręczna nie znika i ma pierwszeństwo, gdy zmiana dotyka autoryzacji, punktu wejścia albo konfiguracji wrangler: `npm run cf:preview` → zweryfikuj alias `pre` → `npx wrangler versions deploy <ID>@100%`. Jeśli chcesz **na stałe** rozdzielić „buduj" od „wdrażaj", zmień Deploy command na `npx wrangler versions upload` — wtedy Workers Builds produkuje wersję na każdy commit, a promocja zostaje ręczna. To przywraca ludzką bramkę z `infrastructure.md`; rozważ, jeśli auto-deploy kiedyś Cię sparzy.
 
