@@ -349,9 +349,11 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
 - [ ] **[A] 4.9 Nie dodawaj `SUPABASE_URL` / `SUPABASE_KEY` jako build variables.** Dokumentacja jest jednoznaczna: _„Build variables will not be accessible at runtime"_. A ustaliliśmy w kroku 3.6, że `astro:env` rozwiązuje sekrety **w runtime** z `cloudflare:workers` — więc wartości z etapu budowania i tak nie trafiłyby do działającego workera. Runtime bierze je z sekretów workera ustawionych w 3.4 i **Workers Builds ich nie nadpisuje ani nie kasuje**. Build przechodzi bez nich, bo są `optional: true`.
 - [ ] **[H] 4.10 Sekrety GitHuba** (Settings → Secrets → Actions): `SUPABASE_URL` i `SUPABASE_KEY` — potrzebne wyłącznie jobowi `ci`, który już ich oczekuje przy buildzie. `CLOUDFLARE_API_TOKEN` i `CLOUDFLARE_ACCOUNT_ID` **nie są tu potrzebne** — GitHub Actions nic nie wdraża.
 
+  **Rewizja (2026-10-08) — krok zbędny, zalecam pominąć.** Krok 3.6 rozstrzygnął, że sekrety `astro:env` (`access: "secret"`) są czytane w runtime i **nie** są wkompilowywane w bundle; są też `optional: true`. Build w jobie `ci` przechodzi więc bez nich identycznie (lokalnie zweryfikowane wielokrotnie — każdy build w Fazie 3 szedł bez sekretów w środowisku). Wpisanie ich do GitHuba tylko dokłada trzecie miejsce, w którym żyją poświadczenia produkcyjne, bez żadnego zysku. Odwołania `${{ secrets.SUPABASE_* }}` w `ci.yml` przy braku sekretu rozwijają się do pustego stringa — nieszkodliwe.
+
 ### 4d. Weryfikacja po wdrożeniu
 
-- [ ] **[A] 4.11 Dodaj `.github/workflows/verify-production.yml`** — Workers Builds raportuje „deployed", nie „działa poprawnie". Bez tego ciche wejście w tryb zdegradowany przechodzi niezauważone; to jest rekompensata za usuniętą ludzką bramkę:
+- [x] **[A] 4.11 Dodaj `.github/workflows/verify-production.yml`** — Workers Builds raportuje „deployed", nie „działa poprawnie". Bez tego ciche wejście w tryb zdegradowany przechodzi niezauważone; to jest rekompensata za usuniętą ludzką bramkę: **Wykonano 2026-10-08** (plus `timeout-minutes: 5`); logika sondy sprawdzona lokalnie przeciw produkcji — PASS.
 
   ```yaml
   name: Verify production

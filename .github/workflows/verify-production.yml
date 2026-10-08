@@ -1,0 +1,23 @@
+name: Verify production
+
+# Workers Builds raportuje „deployed", nie „działa poprawnie". Ta sonda łapie
+# ciche wejście w tryb zdegradowany (brak sekretów, Supabase nieosiągalny).
+# Raz na dobę, nie co godzinę — repozytorium prywatne ma 2 000 minut Actions/mc.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 6 * * *"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe production
+        run: |
+          set -e
+          BASE=https://trending-skins.lysiog16.workers.dev
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")" = "200"
+          curl -sf "$BASE/api/health" | tee /dev/stderr | grep -q '"ok":true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/dashboard")" = "302"
