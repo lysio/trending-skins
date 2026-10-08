@@ -2,7 +2,8 @@ name: Verify production
 
 # Workers Builds raportuje „deployed", nie „działa poprawnie". Ta sonda łapie
 # ciche wejście w tryb zdegradowany (brak sekretów, Supabase nieosiągalny).
-# Raz na dobę, nie co godzinę — repozytorium prywatne ma 2 000 minut Actions/mc.
+# Raz na dobę: repozytorium jest publiczne (minuty Actions bez limitu), ale
+# częstsza sonda nic nie wnosi bez crona — patrz deployment-plan.md, 4.11.
 
 on:
   workflow_dispatch:
