@@ -13,7 +13,11 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
   },
-  adapter: cloudflare(),
+  // Bez tych dwóch opcji adapter dokleja do wygenerowanego wrangler.json wiązania
+  // SESSION (KV) i IMAGES (Cloudflare Images), a wrangler deploy próbuje utworzyć
+  // przestrzeń KV. Aplikacja nie używa ani Astro Sessions, ani astro:assets.
+  adapter: cloudflare({ imageService: "passthrough" }),
+  session: false,
   env: {
     schema: {
       SUPABASE_URL: envField.string({ context: "server", access: "secret", optional: true }),

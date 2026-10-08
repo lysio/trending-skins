@@ -48,7 +48,7 @@ Dokumentacja jest jednoznaczna: *„If you exceed any one of these limits, furth
 ### Czego ten plan świadomie NIE robi
 
 - **Nie przechodzi na Workers Paid ($5/mc).** Poprzednia wersja tego dokumentu traktowała to jako „zaplanowany wydatek". Przy twardym zerze to opcja wykreślona — przekroczenie 10 ms CPU jest odtąd **sygnałem do optymalizacji kodu**, nie do zmiany planu. Patrz przepisana Faza 5.
-- **Nie kupuje własnej domeny.** Zostajemy na `trending-skins.<subdomain>.workers.dev`.
+- **Nie kupuje własnej domeny.** Zostajemy na `trending-skins.lysiog16.workers.dev`.
 - **Nie zakłada usług Cloudflare płatnych od pierwszego bajtu.** Gdyby kiedyś wchodziło R2, D1, KV czy Queues — każde ma własny darmowy próg i każde wymaga osobnego sprawdzenia przed dodaniem.
 
 ---
@@ -135,7 +135,7 @@ Kolejność jest celowa: „zmiana nazwy tworzy drugiego workera" jest problemem
   Get-Content dist\server\wrangler.json | ConvertFrom-Json | Select-Object name | Format-List
   ```
   Musi pokazać `trending-skins`. Jeśli nie — edycja nie dotarła do builda.
-- [~] **1.4 Gałąź awaryjna (NIEAKTYWNA — stary worker nigdy nie istniał) — stary worker już istnieje.** Workers nie ma operacji zmiany nazwy. Zmiana `name` sprawia, że następne wdrożenie **tworzy nowego workera**; stary zachowuje swój adres `10x-astro-starter.<subdomain>.workers.dev`, dalej serwuje stary bundle i trzyma własną kopię sekretów.
+- [~] **1.4 Gałąź awaryjna (NIEAKTYWNA — stary worker nigdy nie istniał) — stary worker już istnieje.** Workers nie ma operacji zmiany nazwy. Zmiana `name` sprawia, że następne wdrożenie **tworzy nowego workera**; stary zachowuje swój adres `10x-astro-starter.lysiog16.workers.dev`, dalej serwuje stary bundle i trzyma własną kopię sekretów.
   - [ ] **[A]** `npx wrangler deployments list --name 10x-astro-starter`
   - [ ] **[A]** `npx wrangler tail --name 10x-astro-starter --format json` przez ~60 s — potwierdź, że nie odbiera nic istotnego
   - [ ] **[H]** `npx wrangler delete --name 10x-astro-starter` — operacja niszcząca, tylko człowiek. Usuwa też jego sekrety.
@@ -223,44 +223,54 @@ Ta faza idzie **przed** pierwszym wdrożeniem celowo. `optional: true` znaczy, �
 
 ## Faza 3 — Pierwsze wdrożenie produkcyjne (wersja podglądowa → promocja)
 
-*Wejście:* Faza 2 wraz z testem negatywnym. *Wyjście:* `https://trending-skins.<subdomain>.workers.dev` serwuje aplikację ze skonfigurowanym Supabase, osiągnięte przez wersję podglądową zweryfikowaną zanim ruch się przełączył.
+*Wejście:* Faza 2 wraz z testem negatywnym. *Wyjście:* `https://trending-skins.lysiog16.workers.dev` serwuje aplikację ze skonfigurowanym Supabase, osiągnięte przez wersję podglądową zweryfikowaną zanim ruch się przełączył.
 
-- [ ] **[H] 3.1 Poświadczenia.** Jesteś już zalogowany (`wrangler whoami` pokazuje konto `<e-mail właściciela>'s Account`, ID `4f2592b44efa736773d92fcf1eaa4978`), ale **to sesja OAuth z bardzo szerokimi uprawnieniami** (workers, d1, kv, queues, containers, email, secrets_store — zapis). Zgodnie z barierą dostępu produkcyjnego z `infrastructure.md` wygeneruj **token API o wąskim zakresie**: `Workers Scripts:Edit` + `Workers Observability:Read`, wyłącznie to konto, bez DNS, bez rozliczeń. Trzymaj go w zmiennej środowiskowej `CLOUDFLARE_API_TOKEN`, nigdy w pliku w repozytorium. Ten sam token pójdzie do sekretów GitHuba w Fazie 4.
-- [ ] **[A] 3.2 Pierwsze wdrożenie celowo BEZ sekretów.** `wrangler secret put` na nieistniejącym workerze zgłosi „script not found", więc kolejność i tak jest wymuszona — a przy okazji sprawdzasz wykrywacz trybu zdegradowanego na produkcji, zanim mu zaufasz.
+- [x] **[H] 3.1 Poświadczenia.** **Wykonano 2026-10-08:** token `trending-skins-deploy` (`Workers Scripts:Edit`, `Workers Observability:Read`, **dodatkowo `Workers Tail:Read`** — bez niego `wrangler tail` z Fazy 5 nie zadziała), plus `CLOUDFLARE_ACCOUNT_ID` w zmiennych użytkownika (`setx`). `wrangler whoami` potwierdza logowanie tokenem; brak `User Details:Read` daje tylko ostrzeżenie o e-mailu — celowo. Subdomena konta: **`lysiog16.workers.dev`**. Jesteś już zalogowany (`wrangler whoami` pokazuje konto `<e-mail właściciela>'s Account`, ID `4f2592b44efa736773d92fcf1eaa4978`), ale **to sesja OAuth z bardzo szerokimi uprawnieniami** (workers, d1, kv, queues, containers, email, secrets_store — zapis). Zgodnie z barierą dostępu produkcyjnego z `infrastructure.md` wygeneruj **token API o wąskim zakresie**: `Workers Scripts:Edit` + `Workers Observability:Read`, wyłącznie to konto, bez DNS, bez rozliczeń. Trzymaj go w zmiennej środowiskowej `CLOUDFLARE_API_TOKEN`, nigdy w pliku w repozytorium. Ten sam token pójdzie do sekretów GitHuba w Fazie 4.
+- [x] **[A] 3.2 Pierwsze wdrożenie celowo BEZ sekretów.** `wrangler secret put` na nieistniejącym workerze zgłosi „script not found", więc kolejność i tak jest wymuszona — a przy okazji sprawdzasz wykrywacz trybu zdegradowanego na produkcji, zanim mu zaufasz.
   ```powershell
   npm run build
   npx wrangler versions upload --preview-alias pre
   ```
-  Zapisz Version ID i adres podglądu (`https://pre-trending-skins.<subdomain>.workers.dev`).
-- [ ] **[A] 3.3** Sprawdź podgląd: `/api/health` musi zwrócić **503** z `configured:false`. To potwierdza, że detektor działa na produkcji.
-- [ ] **[H] 3.4 Ustaw sekrety — tylko człowiek.** Masz już hostowany projekt Supabase; weź z niego URL i anon key.
+  Zapisz Version ID i adres podglądu (`https://pre-trending-skins.lysiog16.workers.dev`).
+
+  **Zaobserwowane 2026-10-08 — ten krok w tej postaci NIE DZIAŁA dla nowego workera:** `versions upload` kończy się błędem *„You cannot upload a new version of a Worker that does not yet exist. Please run the `deploy` command first."* (nic nie zostało wysłane). Pierwsze utworzenie workera wymaga `wrangler deploy`, które od razu kieruje 100% ruchu na nową wersję. Wersja podglądowa przed pierwszym ruchem produkcyjnym jest więc niemożliwa; dopiero od drugiej wersji `versions upload` działa. Build z tego kroku sprawdzony: poświadczenia z `.dev.vars` trafiają wyłącznie do `dist/server/.dev.vars` (nie do bundla), zasoby statyczne to `dist/client`, a `.assetsignore` wyklucza `.dev.vars`.
+
+  **Drugie potknięcie (2026-10-08):** `wrangler deploy` padł na `/storage/kv/namespaces` — token nie ma uprawnień do KV, i dobrze. Źródło: `@astrojs/cloudflare` 14.3.1 **sam dokleja** do wygenerowanego `wrangler.json` wiązanie `SESSION` (KV, domyślny sterownik Astro Sessions), a wrangler 4 próbuje je **automatycznie utworzyć** przy deployu. Do tego wiązanie `IMAGES` (Cloudflare Images, domyślny `imageService: "cloudflare-binding"`). Aplikacja nie używa ani sesji Astro, ani `astro:assets`, więc w `astro.config.mjs`: `session: false` + `cloudflare({ imageService: "passthrough" })`. Po przebudowie `kv_namespaces: []`, brak `images`; `astro check` 0 błędów, lint czysty. Przy okazji domyka to kontrakt budżetowy — ani KV, ani Images nie wchodzą do projektu bez osobnej decyzji.
+- [x] **[A] 3.3** Sprawdź podgląd: `/api/health` musi zwrócić **503** z `configured:false`. To potwierdza, że detektor działa na produkcji. **Wynik (2026-10-08, V1 `9524a0fb-f21b-462e-a27a-6dbaa357c8d3`, wdrożona przez człowieka `wrangler deploy` — na produkcji, nie na podglądzie, patrz 3.2):** `/` = 200 z czerwonym banerem „Supabase nie jest skonfigurowany" · `/api/health` = **503** `{"ok":false,"supabase":{"configured":false,"reachable":null}}` · `/dashboard` = 302 → `/auth/signin`.
+- [ ] **[H] 3.4 Ustaw sekrety — tylko człowiek, we własnym terminalu.** Projekt **produkcyjny** Supabase (nie staging `lqwpdqwptujpoxcogiwb`); URL i publishable/anon key.
   ```powershell
-  npx wrangler secret put SUPABASE_URL --name trending-skins
-  npx wrangler secret put SUPABASE_KEY --name trending-skins
-  npx wrangler secret list --name trending-skins
+  npx wrangler versions secret put SUPABASE_URL --name trending-skins
+  npx wrangler versions secret put SUPABASE_KEY --name trending-skins
+  npx wrangler versions list --name trending-skins
   ```
+  **Poprawka (zweryfikowane w kodzie wranglera 4.131.1, 2026-10-08):** pierwotna wersja tego kroku używała `wrangler secret put` — to **się wywraca**. Po 3.2 najnowsza wersja nie jest wdrożona, a `secret put` celowo odmawia wtedy działania (`VERSION_NOT_DEPLOYED`: *„use `wrangler versions secret put` instead"*), bo zwykłe `secret put` tworzy wersję **i ją wdraża**. `versions secret put` tworzy nową wersję (ten sam bundle + sekret) **bez** wdrożenia. Każde wywołanie to osobna wersja — po dwóch mamy V3 z obydwoma sekretami.
+
   `--name` nie jest kosmetyką — broni przed przekierowaniem konfiguracji z §2 kontekstu.
-- [ ] **[A] 3.5 Zweryfikuj podgląd ponownie, BEZ przebudowy i BEZ ponownego wdrożenia:**
+- [ ] **[A] 3.5 Zweryfikuj podgląd NOWEJ wersji, BEZ przebudowy:**
   ```powershell
-  curl.exe -s -o NUL -w "%{http_code}`n" https://pre-trending-skins.<subdomain>.workers.dev/
-  curl.exe -s https://pre-trending-skins.<subdomain>.workers.dev/api/health
-  curl.exe -s -o NUL -w "%{http_code} %{redirect_url}`n" https://pre-trending-skins.<subdomain>.workers.dev/dashboard
+  curl.exe -s -o NUL -w "%{http_code}`n" https://<8-znaków-ID>-trending-skins.lysiog16.workers.dev/
+  curl.exe -s https://<8-znaków-ID>-trending-skins.lysiog16.workers.dev/api/health
+  curl.exe -s -o NUL -w "%{http_code} %{redirect_url}`n" https://<8-znaków-ID>-trending-skins.lysiog16.workers.dev/dashboard
   ```
+  **Poprawka:** sekrety są częścią **wersji**, nie workera. Alias `pre` zostaje przypięty do V1 (bez sekretów) i dalej dawałby 503. Sprawdza się adres podglądu wersji z sekretami — prefiks to pierwsze 8 znaków jej Version ID.
+
   **Bramka: `/api/health` musi zwrócić 200 z `configured:true, reachable:true`.**
-- [ ] **[A] 3.6 Rozstrzygnij empirycznie „sekrety w buildzie czy w runtime" — raz, i zapisz wynik.** Przejście 3.3 (503) → 3.5 (200) **bez przebudowy** jest już dowodem rozwiązywania w runtime. Domknij to testem rotacji:
-  1. Ustaw `SUPABASE_KEY` na celowo błędną wartość, odczekaj ~10 s (zmiana sekretu restartuje izolaty).
-  2. `/api/health` musi przeskoczyć na `reachable:false` **bez przebudowy i bez wdrożenia**.
-  3. Przywróć poprawną wartość; health wraca do 200.
+- [ ] **[A] 3.6 Rozstrzygnij empirycznie „sekrety w buildzie czy w runtime" — raz, i zapisz wynik.** Przejście 3.3 (503 na V1) → 3.5 (200 na V3) przy **tym samym bundlu, bez przebudowy** jest już dowodem rozwiązywania w runtime. Domknij to testem rotacji:
+  1. **[H]** `versions secret put SUPABASE_KEY` z celowo błędną wartością → V4.
+  2. **[A]** Podgląd V4: `/api/health` musi dać `reachable:false`.
+  3. **[H]** `versions secret put SUPABASE_KEY` z poprawną wartością → V5; **[A]** podgląd V5 = 200.
+
+  Krok 3 **nie jest opcjonalny**: kolejne wdrożenia dziedziczą sekrety z poprzednich wersji — gdyby najnowsza wersja niosła zły klucz, Workers Builds mógłby go przenieść na produkcję. Promujemy V5, nie V3 — wtedy najnowsza wersja = wdrożona, i zwykłe `secret put` znów działa przy przyszłych rotacjach.
 
   Jeśli krok 2 **nie** przeskoczy, wiersz rejestru ryzyk „rotacja sekretu wymaga przebudowania" jest potwierdzony i każda rotacja staje się `build + versions upload + versions deploy`. Zapisz obserwowany wynik w `deployment-plan.md` — nie przenoś założenia dalej.
 - [ ] **[H] 3.7 NIE uruchamiaj `npm run smoke` przeciw produkcji.** Skrypt woła `POST /api/auth/signup` z `smoke-<timestamp>@example.com` i tworzy **prawdziwy wiersz w `auth.users`**, a przechodzi tylko przy wyłączonym potwierdzaniu e-maila — czego na produkcji nie chcesz. Zamiast tego **sonda tylko do odczytu** jako produkcyjny test akceptacyjny: trzy wywołania `curl.exe` z 3.5 (`/` = 200, `/api/health` = 200, `/dashboard` = 302 → `/auth/signin`). Zero zapisów, zero autoryzacji. Pełny smoke zostaje tam, gdzie jest: lokalny Supabase + `wrangler dev` (2.5) i job `smoke` w CI. Gdybyś kiedyś potrzebował pokrycia przepływu autoryzacji przeciw hostowanemu Supabase — osobny projekt stagingowy, nigdy produkcyjny.
 - [ ] **[H] 3.8 Promuj — przesunięcie ruchu produkcyjnego.**
   ```powershell
-  npx wrangler versions list
-  npx wrangler versions deploy <VERSION_ID>@100%
+  npx wrangler versions list --name trending-skins
+  npx wrangler versions deploy <ID-V5>@100% --name trending-skins
   ```
-- [ ] **[A] 3.9 Zweryfikuj produkcję** tymi samymi trzema sondami przeciw `https://trending-skins.<subdomain>.workers.dev`, plus `npx wrangler deployments list` pokazujący oczekiwaną wersję na 100%.
-- [ ] **[A] 3.10** Ustaw `site: "https://trending-skins.<subdomain>.workers.dev"` w `astro.config.mjs`. `sitemap()` jest dziś włączony **bez** `site`, więc tylko ostrzega i nie emituje nic użytecznego. Przebuduj.
+- [ ] **[A] 3.9 Zweryfikuj produkcję** tymi samymi trzema sondami przeciw `https://trending-skins.lysiog16.workers.dev`, plus `npx wrangler deployments list` pokazujący oczekiwaną wersję na 100%.
+- [ ] **[A] 3.10** Ustaw `site: "https://trending-skins.lysiog16.workers.dev"` w `astro.config.mjs`. `sitemap()` jest dziś włączony **bez** `site`, więc tylko ostrzega i nie emituje nic użytecznego. Przebuduj.
 - [ ] **3.11 Gałąź awaryjna — wycofanie.**
   ```powershell
   npx wrangler deployments list --name trending-skins
@@ -332,7 +342,7 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
         - name: Probe production
           run: |
             set -e
-            BASE=https://trending-skins.<subdomain>.workers.dev
+            BASE=https://trending-skins.lysiog16.workers.dev
             test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")" = "200"
             curl -sf "$BASE/api/health" | tee /dev/stderr | grep -q '"ok":true'
             test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/dashboard")" = "302"
