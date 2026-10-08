@@ -313,21 +313,23 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
 
 ### Stan Fazy 4 (2026-10-08)
 
-| Krok                                    | Stan                                                                                             |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| 4.1 repozytorium                        | ⏳ **czeka na człowieka** — decyzja podjęta (publiczne), historia oczyszczona, polecenia poniżej |
-| 4.2–4.4 husky, skrypty, Node            | ✅ commit `ac3ab77`                                                                              |
-| 4.5–4.8 Workers Builds + ochrona gałęzi | ⬜ po 4.1                                                                                        |
-| 4.9 bez build variables                 | ⬜ do potwierdzenia przy 4.6                                                                     |
-| 4.10 sekrety GitHuba                    | ⏭️ **zbędne** — patrz rewizja przy kroku                                                         |
-| 4.11 `verify-production.yml`            | ✅ commit `7071f42`                                                                              |
-| 4.12 test end-to-end                    | ⬜                                                                                               |
+| Krok                         | Stan                                                                  |
+| ---------------------------- | --------------------------------------------------------------------- |
+| 4.1 repozytorium             | ✅ `lysio/trending-skins`, publiczne; pierwsze CI: `ci` ✅ `smoke` ✅ |
+| 4.2–4.4 husky, skrypty, Node | ✅ commit `ac3ab77`                                                   |
+| 4.5–4.6 Workers Builds       | ✅ podłączone przez człowieka (2026-10-08)                            |
+| 4.7 zgodność nazwy           | ⬜ potwierdzi pierwszy build w 4.12                                   |
+| 4.8 ochrona gałęzi           | ⏭️ **pominięte — decyzja człowieka 2026-10-08**, patrz krok           |
+| 4.9 bez build variables      | ✅ build variables puste                                              |
+| 4.10 sekrety GitHuba         | ⏭️ **zbędne** — patrz rewizja przy kroku                              |
+| 4.11 `verify-production.yml` | ✅ commit `7071f42`                                                   |
+| 4.12 test end-to-end         | ⬜                                                                    |
 
 **Granica agent / człowiek w praktyce.** Tryb auto Claude Code blokuje agentowi zarówno `wrangler deploy` (Faza 3), jak i `gh repo create … --push` (ustawienie zdalnego repo + wypchnięcie). Niezależnie od oznaczeń `[A]` w tym planie — **pierwsze wdrożenie, utworzenie repozytorium i push wykonuje człowiek**. Agent przygotowuje wszystko lokalnie i weryfikuje po fakcie.
 
 ### 4a. Repozytorium
 
-- [ ] **[H] 4.1 Repozytorium — PUBLICZNE (zmiana względem planu, decyzja 2026-10-08).** Pierwotnie `--private`. Zmienione, bo **GitHub Free nie egzekwuje ochrony gałęzi w repozytoriach prywatnych** (wymaga Pro) — a 4.8 to jedyna bramka jakości przed auto-deployem. Publiczne repo daje ją za darmo i przy okazji **nielimitowane minuty Actions** (domyka B.3). Rozważone i odrzucone: prywatne z ręczną promocją (`versions upload` w Workers Builds) oraz prywatne bez bramki.
+- [x] **[H] 4.1 Repozytorium — PUBLICZNE (zmiana względem planu, decyzja 2026-10-08).** Pierwotnie `--private`. Zmienione, bo **GitHub Free nie egzekwuje ochrony gałęzi w repozytoriach prywatnych** (wymaga Pro) — a 4.8 to jedyna bramka jakości przed auto-deployem. Publiczne repo daje ją za darmo i przy okazji **nielimitowane minuty Actions** (domyka B.3). Rozważone i odrzucone: prywatne z ręczną promocją (`versions upload` w Workers Builds) oraz prywatne bez bramki.
 
   **Przygotowanie do upublicznienia (wykonane przez agenta, lokalnie, przed jakimkolwiek pushem):**
   - Skan historii: brak kluczy, tokenów, `.dev.vars`, `.env` — czysto.
@@ -345,6 +347,8 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
 
   **Bez `--push` i bez `git push --all`** — wypchnęłyby gałąź kopii. Push uruchamia `ci.yml` po raz pierwszy w historii projektu; job `smoke` nigdy wcześniej nie biegł.
 
+  **Wykonano 2026-10-08:** `https://github.com/lysio/trending-skins`, publiczne, domyślna gałąź `master`; zdalnie wyłącznie `refs/heads/master` (gałąź kopii nie wypchnięta). Pierwszy przebieg CI (run `37782506504`): `ci` ✅, `smoke` ✅.
+
 - [x] **[A] 4.2 Napraw husky.** `package.json` nie ma skryptu `prepare`, więc haki nie instalują się nawet teraz, gdy `.git` istnieje. Dodaj `"prepare": "husky"` i `npm install` — inaczej lint-staged nigdy nie zadziała. **Wykonano 2026-10-08:** `core.hooksPath = .husky/_`. Uwaga: lokalny npm 12.0.2 (Node 24.17) **domyślnie blokuje skrypty instalacyjne zależności** (`npm warn install-scripts esbuild… workerd…`) — `prepare` własnego pakietu biegnie, ale postinstall `esbuild`/`workerd` nie. Dziś bez skutków (binarki już na dysku), na świeżym klonie z npm 12 może być potrzebne `npm install-scripts approve esbuild workerd`. CI i Workers Builds (Node 22 → npm 10) tego nie dotyczy.
 - [x] **[A] 4.3 Dodaj skrypty npm** (dziś nie ma żadnego skryptu wdrożeniowego):
   ```json
@@ -360,8 +364,8 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
 
 ### 4b. Podłączenie Workers Builds
 
-- [ ] **[H] 4.5 Podłącz repozytorium — panel, jednorazowo.** **Workers & Pages → `trending-skins` → Settings → Builds → Connect**, autoryzuj aplikację Cloudflare GitHub, wskaż repozytorium `trending-skins`. Zakres uprawnień ogranicz do **tego jednego repozytorium**, nie całego konta.
-- [ ] **[H] 4.6 Ustaw konfigurację budowania:**
+- [x] **[H] 4.5 Podłącz repozytorium — panel, jednorazowo.** **Workers & Pages → `trending-skins` → Settings → Builds → Connect**, autoryzuj aplikację Cloudflare GitHub, wskaż repozytorium `trending-skins`. Zakres uprawnień ogranicz do **tego jednego repozytorium**, nie całego konta.
+- [x] **[H] 4.6 Ustaw konfigurację budowania:**
 
   | Pole                    | Wartość               | Uwaga                                                                          |
   | ----------------------- | --------------------- | ------------------------------------------------------------------------------ |
@@ -374,11 +378,11 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
   Nie ma potrzeby podawać tokenu API — Workers Builds działa na uprawnieniach konta, nie przez `CLOUDFLARE_API_TOKEN`. Token o wąskim zakresie z 3.1 zostaje do ręcznych operacji z Twojej maszyny.
 
 - [ ] **[A] 4.7** Zweryfikuj w panelu, że `name` workera (`trending-skins`) zgadza się z `name` w `wrangler.jsonc`. **Niezgodność = build przechodzi, wdrożenie pada.**
-- [ ] **[H] 4.8 Ochrona gałęzi `master`** (GitHub → Settings → Branches): wymagaj PR przed merge, wymagaj zielonych statusów `ci` i `smoke`. **To jedyna bramka jakości, jaka istnieje w tym układzie** — Workers Builds nie zna wyników GitHub Actions i wdroży każdy push na `master` niezależnie od nich. **Wykonalne na GitHub Free tylko dlatego, że repozytorium jest publiczne** (patrz 4.1). Statusy `ci` i `smoke` pojawią się do wyboru dopiero po ich pierwszym uruchomieniu — czyli po pierwszym pushu.
+- [~] **[H] 4.8 Ochrona gałęzi `master`** — **POMINIĘTE (decyzja człowieka, 2026-10-08).** Konsekwencja przyjęta świadomie: każdy push na `master` trafia na produkcję przez Workers Builds niezależnie od wyniku `ci`/`smoke`. Jedyne zabezpieczenia, jakie zostają: dyscyplina „zmiany przez PR”, `verify-production` (raz na dobę lub ręcznie) i rollback w sekundach (3.11). Powrót do bramki: ten krok albo Deploy command → `npx wrangler versions upload` (4.16). Pierwotny opis: (GitHub → Settings → Branches): wymagaj PR przed merge, wymagaj zielonych statusów `ci` i `smoke`. **To jedyna bramka jakości, jaka istnieje w tym układzie** — Workers Builds nie zna wyników GitHub Actions i wdroży każdy push na `master` niezależnie od nich. **Wykonalne na GitHub Free tylko dlatego, że repozytorium jest publiczne** (patrz 4.1). Statusy `ci` i `smoke` pojawią się do wyboru dopiero po ich pierwszym uruchomieniu — czyli po pierwszym pushu.
 
 ### 4c. Sekrety — dwa osobne magazyny
 
-- [ ] **[A] 4.9 Nie dodawaj `SUPABASE_URL` / `SUPABASE_KEY` jako build variables.** Dokumentacja jest jednoznaczna: _„Build variables will not be accessible at runtime"_. A ustaliliśmy w kroku 3.6, że `astro:env` rozwiązuje sekrety **w runtime** z `cloudflare:workers` — więc wartości z etapu budowania i tak nie trafiłyby do działającego workera. Runtime bierze je z sekretów workera ustawionych w 3.4 i **Workers Builds ich nie nadpisuje ani nie kasuje**. Build przechodzi bez nich, bo są `optional: true`.
+- [x] **[A] 4.9 Nie dodawaj `SUPABASE_URL` / `SUPABASE_KEY` jako build variables.** Dokumentacja jest jednoznaczna: _„Build variables will not be accessible at runtime"_. A ustaliliśmy w kroku 3.6, że `astro:env` rozwiązuje sekrety **w runtime** z `cloudflare:workers` — więc wartości z etapu budowania i tak nie trafiłyby do działającego workera. Runtime bierze je z sekretów workera ustawionych w 3.4 i **Workers Builds ich nie nadpisuje ani nie kasuje**. Build przechodzi bez nich, bo są `optional: true`.
 - [ ] **[H] 4.10 Sekrety GitHuba** (Settings → Secrets → Actions): `SUPABASE_URL` i `SUPABASE_KEY` — potrzebne wyłącznie jobowi `ci`, który już ich oczekuje przy buildzie. `CLOUDFLARE_API_TOKEN` i `CLOUDFLARE_ACCOUNT_ID` **nie są tu potrzebne** — GitHub Actions nic nie wdraża.
 
   **Rewizja (2026-10-08) — krok zbędny, zalecam pominąć.** Krok 3.6 rozstrzygnął, że sekrety `astro:env` (`access: "secret"`) są czytane w runtime i **nie** są wkompilowywane w bundle; są też `optional: true`. Build w jobie `ci` przechodzi więc bez nich identycznie (w 3.2 przeszukanie zbudowanego bundla potwierdziło, że wartości z `.dev.vars` nie trafiają do kodu — leżą tylko w `dist/server/.dev.vars`, którego wrangler nie wysyła). Wpisanie ich do GitHuba tylko dokłada trzecie miejsce, w którym żyją poświadczenia produkcyjne, bez żadnego zysku. Odwołania `${{ secrets.SUPABASE_* }}` w `ci.yml` przy braku sekretu rozwijają się do pustego stringa — nieszkodliwe.
