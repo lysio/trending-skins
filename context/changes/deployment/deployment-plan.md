@@ -318,12 +318,12 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
 | 4.1 repozytorium             | ✅ `lysio/trending-skins`, publiczne; pierwsze CI: `ci` ✅ `smoke` ✅ |
 | 4.2–4.4 husky, skrypty, Node | ✅ commit `ac3ab77`                                                   |
 | 4.5–4.6 Workers Builds       | ✅ podłączone przez człowieka (2026-10-08)                            |
-| 4.7 zgodność nazwy           | ⬜ potwierdzi pierwszy build w 4.12                                   |
+| 4.7 zgodność nazwy           | ✅ potwierdzone buildami w 4.12                                       |
 | 4.8 ochrona gałęzi           | ⏭️ **pominięte — decyzja człowieka 2026-10-08**, patrz krok           |
 | 4.9 bez build variables      | ✅ build variables puste                                              |
 | 4.10 sekrety GitHuba         | ⏭️ **zbędne** — patrz rewizja przy kroku                              |
 | 4.11 `verify-production.yml` | ✅ commit `7071f42`                                                   |
-| 4.12 test end-to-end         | ⬜                                                                    |
+| 4.12 test end-to-end         | ✅ PR #1 → produkcja `71d1ee14` @ 100%                                |
 
 **Granica agent / człowiek w praktyce.** Tryb auto Claude Code blokuje agentowi zarówno `wrangler deploy` (Faza 3), jak i `gh repo create … --push` (ustawienie zdalnego repo + wypchnięcie). Niezależnie od oznaczeń `[A]` w tym planie — **pierwsze wdrożenie, utworzenie repozytorium i push wykonuje człowiek**. Agent przygotowuje wszystko lokalnie i weryfikuje po fakcie.
 
