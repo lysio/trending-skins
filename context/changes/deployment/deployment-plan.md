@@ -43,7 +43,7 @@ Dokumentacja jest jednoznaczna: _„If you exceed any one of these limits, furth
 
 - [x] **[H] B.1 Nie dodawaj metody płatności do Cloudflare.** Konto bez karty nie może przejść na plan płatny przypadkiem. Sprawdź: **Manage Account → Billing → Payment Info** — powinno być puste. To jest właściwe zabezpieczenie, a nie dyscyplina.
 - [x] **[H] B.2 Potwierdź, że limit wydatków GitHuba to 0 USD** (Settings → Billing → Spending limit). To wartość domyślna dla kont rozliczanych miesięcznie; potwierdź ją, bo po jej podniesieniu nadmiarowe minuty **są** fakturowane.
-- [ ] **[A] B.3 Pilnuj budżetu minut GitHub Actions.** Job `smoke` startuje lokalne Supabase w Dockerze — to najdroższy job w repozytorium, realnie kilka minut na uruchomienie. Przy 2 000 minut miesięcznie i repozytorium prywatnym liczy się każda harmonogramowana pętla. Konkretna konsekwencja dla tego planu: **sonda `verify-production` biegnie raz na dobę, nie co godzinę** (krok 4.11). Godzinowa to 720 uruchomień miesięcznie; dobowa to 30. Jeśli kiedykolwiek zabraknie minut — CI się zatrzyma, nic nie zostanie naliczone, a najprostszym wyjściem jest przełączenie repozytorium na publiczne (wtedy Actions są nielimitowane).
+- [x] **[A] B.3 Pilnuj budżetu minut GitHub Actions.** **Domknięte decyzją z 2026-10-08: repozytorium jest publiczne → minuty Actions nielimitowane** (patrz 4.1). Poniższe rozumowanie zostaje jako uzasadnienie na wypadek powrotu do prywatnego repo. Job `smoke` startuje lokalne Supabase w Dockerze — to najdroższy job w repozytorium, realnie kilka minut na uruchomienie. Przy 2 000 minut miesięcznie i repozytorium prywatnym liczy się każda harmonogramowana pętla. Konkretna konsekwencja dla tego planu: **sonda `verify-production` biegnie raz na dobę, nie co godzinę** (krok 4.11). Godzinowa to 720 uruchomień miesięcznie; dobowa to 30. Jeśli kiedykolwiek zabraknie minut — CI się zatrzyma, nic nie zostanie naliczone, a najprostszym wyjściem jest przełączenie repozytorium na publiczne (wtedy Actions są nielimitowane).
 
 ### Czego ten plan świadomie NIE robi
 
@@ -311,9 +311,40 @@ _Wejście:_ Faza 3 — istnieje znane-dobre wdrożenie produkcyjne, do którego 
 
 Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **nazwa workera w panelu odpowiadała `name` w konfiguracji wrangler**, a worker musi istnieć, żeby dało się go podłączyć do repozytorium. Pierwsze wdrożenie ręczne ustala tożsamość i dowodzi, że sekrety działają — dopiero potem automat ma co przejmować.
 
+### Stan Fazy 4 (2026-10-08)
+
+| Krok                                    | Stan                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 4.1 repozytorium                        | ⏳ **czeka na człowieka** — decyzja podjęta (publiczne), historia oczyszczona, polecenia poniżej |
+| 4.2–4.4 husky, skrypty, Node            | ✅ commit `ac3ab77`                                                                              |
+| 4.5–4.8 Workers Builds + ochrona gałęzi | ⬜ po 4.1                                                                                        |
+| 4.9 bez build variables                 | ⬜ do potwierdzenia przy 4.6                                                                     |
+| 4.10 sekrety GitHuba                    | ⏭️ **zbędne** — patrz rewizja przy kroku                                                         |
+| 4.11 `verify-production.yml`            | ✅ commit `7071f42`                                                                              |
+| 4.12 test end-to-end                    | ⬜                                                                                               |
+
+**Granica agent / człowiek w praktyce.** Tryb auto Claude Code blokuje agentowi zarówno `wrangler deploy` (Faza 3), jak i `gh repo create … --push` (ustawienie zdalnego repo + wypchnięcie). Niezależnie od oznaczeń `[A]` w tym planie — **pierwsze wdrożenie, utworzenie repozytorium i push wykonuje człowiek**. Agent przygotowuje wszystko lokalnie i weryfikuje po fakcie.
+
 ### 4a. Repozytorium
 
-- [ ] **[A] 4.1** `gh repo create trending-skins --private --source . --push`. To dopiero aktywuje `.github/workflows/ci.yml` (celuje w `master` — nazwa gałęzi z 0.2 już pasuje).
+- [ ] **[H] 4.1 Repozytorium — PUBLICZNE (zmiana względem planu, decyzja 2026-10-08).** Pierwotnie `--private`. Zmienione, bo **GitHub Free nie egzekwuje ochrony gałęzi w repozytoriach prywatnych** (wymaga Pro) — a 4.8 to jedyna bramka jakości przed auto-deployem. Publiczne repo daje ją za darmo i przy okazji **nielimitowane minuty Actions** (domyka B.3). Rozważone i odrzucone: prywatne z ręczną promocją (`versions upload` w Workers Builds) oraz prywatne bez bramki.
+
+  **Przygotowanie do upublicznienia (wykonane przez agenta, lokalnie, przed jakimkolwiek pushem):**
+  - Skan historii: brak kluczy, tokenów, `.dev.vars`, `.env` — czysto.
+  - Znalezione dwa adresy e-mail: autor wszystkich commitów (adres służbowy) oraz e-mail konta Cloudflare w treści planu (krok 3.1/uwaga o tokenie). **Historia przepisana** (`git filter-branch`, 10 commitów): autor i committer → `17855526+lysio@users.noreply.github.com`, e-mail w planie → `<e-mail właściciela>`. Zweryfikowane: zero wystąpień w historii `master`; jedyna różnica treści względem oryginału to ta jedna linia.
+  - `git config user.email` (lokalnie, tylko to repo) ustawione na adres noreply — przyszłe commity go używają.
+  - **Kopia sprzed przepisania: lokalna gałąź `backup/przed-ukryciem-email` — zawiera oba adresy, NIGDY jej nie wypychaj.** Można ją usunąć (`git branch -D backup/przed-ukryciem-email`), gdy push się powiedzie.
+  - Jawne po upublicznieniu (świadomie, nie są sekretami): ID konta Cloudflare, ID projektów Supabase (prod i staging), subdomena `lysiog16.workers.dev`, treść planu.
+
+  **Polecenia (człowiek):**
+
+  ```powershell
+  gh repo create trending-skins --public --source . --remote origin
+  git push -u origin master
+  ```
+
+  **Bez `--push` i bez `git push --all`** — wypchnęłyby gałąź kopii. Push uruchamia `ci.yml` po raz pierwszy w historii projektu; job `smoke` nigdy wcześniej nie biegł.
+
 - [x] **[A] 4.2 Napraw husky.** `package.json` nie ma skryptu `prepare`, więc haki nie instalują się nawet teraz, gdy `.git` istnieje. Dodaj `"prepare": "husky"` i `npm install` — inaczej lint-staged nigdy nie zadziała. **Wykonano 2026-10-08:** `core.hooksPath = .husky/_`. Uwaga: lokalny npm 12.0.2 (Node 24.17) **domyślnie blokuje skrypty instalacyjne zależności** (`npm warn install-scripts esbuild… workerd…`) — `prepare` własnego pakietu biegnie, ale postinstall `esbuild`/`workerd` nie. Dziś bez skutków (binarki już na dysku), na świeżym klonie z npm 12 może być potrzebne `npm install-scripts approve esbuild workerd`. CI i Workers Builds (Node 22 → npm 10) tego nie dotyczy.
 - [x] **[A] 4.3 Dodaj skrypty npm** (dziś nie ma żadnego skryptu wdrożeniowego):
   ```json
@@ -324,7 +355,8 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
   "cf:tail": "wrangler tail --name trending-skins --format json",
   "cf:deploy": "npm run build && wrangler deploy"
   ```
-- [x] **[A] 4.4 Uzgodnij wersję Node'a z obrazem budowania.** `.nvmrc` niesie dziś `22.14.0`, a obraz Workers Builds ma preinstalowane **tylko** `22.23.2` i `24.18.0` (domyślna od 2026-07-30 to Node 24). Workers Builds honoruje `.nvmrc`, `.node-version` i zmienną `NODE_VERSION`, ale proszenie o wersję spoza obrazu w najlepszym razie wydłuża build, w najgorszym go wywraca. Ustaw `.nvmrc` na `22.23.2` (zachowuje linię 22, którą testuje CI) i wyrównaj `node-version: 22.23.2` w `.github/workflows/ci.yml`, żeby CI i Workers Builds budowały tym samym.
+  **Wykonano 2026-10-08** razem z `"prepare": "husky"` (4.2).
+- [x] **[A] 4.4 Uzgodnij wersję Node'a z obrazem budowania.** `.nvmrc` niesie dziś `22.14.0`, a obraz Workers Builds ma preinstalowane **tylko** `22.23.2` i `24.18.0` (domyślna od 2026-07-30 to Node 24). Workers Builds honoruje `.nvmrc`, `.node-version` i zmienną `NODE_VERSION`, ale proszenie o wersję spoza obrazu w najlepszym razie wydłuża build, w najgorszym go wywraca. Ustaw `.nvmrc` na `22.23.2` (zachowuje linię 22, którą testuje CI) i wyrównaj `node-version: 22.23.2` w `.github/workflows/ci.yml`, żeby CI i Workers Builds budowały tym samym. **Wykonano 2026-10-08:** `.nvmrc` = `22.23.2`, oba joby w `ci.yml` = `22.23.2`; build, `astro check` (0 błędów) i lint zielone. Pierwszy commit z aktywnym hakiem pre-commit — lint-staged uruchomił prettier, działa.
 
 ### 4b. Podłączenie Workers Builds
 
@@ -342,14 +374,14 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
   Nie ma potrzeby podawać tokenu API — Workers Builds działa na uprawnieniach konta, nie przez `CLOUDFLARE_API_TOKEN`. Token o wąskim zakresie z 3.1 zostaje do ręcznych operacji z Twojej maszyny.
 
 - [ ] **[A] 4.7** Zweryfikuj w panelu, że `name` workera (`trending-skins`) zgadza się z `name` w `wrangler.jsonc`. **Niezgodność = build przechodzi, wdrożenie pada.**
-- [ ] **[H] 4.8 Ochrona gałęzi `master`** (GitHub → Settings → Branches): wymagaj PR przed merge, wymagaj zielonych statusów `ci` i `smoke`. **To jedyna bramka jakości, jaka istnieje w tym układzie** — Workers Builds nie zna wyników GitHub Actions i wdroży każdy push na `master` niezależnie od nich.
+- [ ] **[H] 4.8 Ochrona gałęzi `master`** (GitHub → Settings → Branches): wymagaj PR przed merge, wymagaj zielonych statusów `ci` i `smoke`. **To jedyna bramka jakości, jaka istnieje w tym układzie** — Workers Builds nie zna wyników GitHub Actions i wdroży każdy push na `master` niezależnie od nich. **Wykonalne na GitHub Free tylko dlatego, że repozytorium jest publiczne** (patrz 4.1). Statusy `ci` i `smoke` pojawią się do wyboru dopiero po ich pierwszym uruchomieniu — czyli po pierwszym pushu.
 
 ### 4c. Sekrety — dwa osobne magazyny
 
 - [ ] **[A] 4.9 Nie dodawaj `SUPABASE_URL` / `SUPABASE_KEY` jako build variables.** Dokumentacja jest jednoznaczna: _„Build variables will not be accessible at runtime"_. A ustaliliśmy w kroku 3.6, że `astro:env` rozwiązuje sekrety **w runtime** z `cloudflare:workers` — więc wartości z etapu budowania i tak nie trafiłyby do działającego workera. Runtime bierze je z sekretów workera ustawionych w 3.4 i **Workers Builds ich nie nadpisuje ani nie kasuje**. Build przechodzi bez nich, bo są `optional: true`.
 - [ ] **[H] 4.10 Sekrety GitHuba** (Settings → Secrets → Actions): `SUPABASE_URL` i `SUPABASE_KEY` — potrzebne wyłącznie jobowi `ci`, który już ich oczekuje przy buildzie. `CLOUDFLARE_API_TOKEN` i `CLOUDFLARE_ACCOUNT_ID` **nie są tu potrzebne** — GitHub Actions nic nie wdraża.
 
-  **Rewizja (2026-10-08) — krok zbędny, zalecam pominąć.** Krok 3.6 rozstrzygnął, że sekrety `astro:env` (`access: "secret"`) są czytane w runtime i **nie** są wkompilowywane w bundle; są też `optional: true`. Build w jobie `ci` przechodzi więc bez nich identycznie (lokalnie zweryfikowane wielokrotnie — każdy build w Fazie 3 szedł bez sekretów w środowisku). Wpisanie ich do GitHuba tylko dokłada trzecie miejsce, w którym żyją poświadczenia produkcyjne, bez żadnego zysku. Odwołania `${{ secrets.SUPABASE_* }}` w `ci.yml` przy braku sekretu rozwijają się do pustego stringa — nieszkodliwe.
+  **Rewizja (2026-10-08) — krok zbędny, zalecam pominąć.** Krok 3.6 rozstrzygnął, że sekrety `astro:env` (`access: "secret"`) są czytane w runtime i **nie** są wkompilowywane w bundle; są też `optional: true`. Build w jobie `ci` przechodzi więc bez nich identycznie (w 3.2 przeszukanie zbudowanego bundla potwierdziło, że wartości z `.dev.vars` nie trafiają do kodu — leżą tylko w `dist/server/.dev.vars`, którego wrangler nie wysyła). Wpisanie ich do GitHuba tylko dokłada trzecie miejsce, w którym żyją poświadczenia produkcyjne, bez żadnego zysku. Odwołania `${{ secrets.SUPABASE_* }}` w `ci.yml` przy braku sekretu rozwijają się do pustego stringa — nieszkodliwe.
 
 ### 4d. Weryfikacja po wdrożeniu
 
@@ -487,16 +519,16 @@ Agent może bez nadzoru: `npm run build`, `wrangler versions upload`, `wrangler 
 
 ## Pliki dotknięte
 
-| Plik                                            | Zmiana                                                            |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-| `wrangler.jsonc`                                | `name` → `trending-skins`                                         |
-| `package.json`                                  | `name`, przypięte `@supabase/*`, skrypt `prepare`, skrypty `cf:*` |
-| `astro.config.mjs`                              | dodać `site` po poznaniu adresu produkcyjnego                     |
-| `src/env.d.ts`                                  | typowanie runtime'u Cloudflare na `App.Locals`                    |
-| `src/pages/api/health.ts`                       | **nowy** — detektor trybu zdegradowanego                          |
-| `.nvmrc`                                        | `22.14.0` → `22.23.2` (wersja obecna w obrazie Workers Builds)    |
-| `.github/workflows/ci.yml`                      | wyrównać `node-version` do `22.23.2`; **bez** joba wdrożeniowego  |
-| `.github/workflows/verify-production.yml`       | **nowy** — sonda po wdrożeniu (Workers Builds nie weryfikuje)     |
-| `.gitignore`                                    | `.dev.vars.*`, `worker-configuration.d.ts`                        |
-| `.dev.vars`                                     | **nowy**, nieśledzony                                             |
-| `context/changes/deployment/deployment-plan.md` | **nowy** — ten plan jako ślad audytowy                            |
+| Plik                                            | Zmiana                                                                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `wrangler.jsonc`                                | `name` → `trending-skins`                                                                                                       |
+| `package.json`                                  | `name`, przypięte `@supabase/*`, skrypt `prepare`, skrypty `cf:*`                                                               |
+| `astro.config.mjs`                              | `site` (adres produkcyjny), `session: false`, `cloudflare({ imageService: "passthrough" })` — wyłączenie wiązań KV/Images (3.2) |
+| `src/env.d.ts`                                  | typowanie runtime'u Cloudflare na `App.Locals`                                                                                  |
+| `src/pages/api/health.ts`                       | **nowy** — detektor trybu zdegradowanego                                                                                        |
+| `.nvmrc`                                        | `22.14.0` → `22.23.2` (wersja obecna w obrazie Workers Builds)                                                                  |
+| `.github/workflows/ci.yml`                      | wyrównać `node-version` do `22.23.2`; **bez** joba wdrożeniowego                                                                |
+| `.github/workflows/verify-production.yml`       | **nowy** — sonda po wdrożeniu (Workers Builds nie weryfikuje)                                                                   |
+| `.gitignore`                                    | `.dev.vars.*`, `worker-configuration.d.ts`                                                                                      |
+| `.dev.vars`                                     | **nowy**, nieśledzony                                                                                                           |
+| `context/changes/deployment/deployment-plan.md` | **nowy** — ten plan jako ślad audytowy                                                                                          |
