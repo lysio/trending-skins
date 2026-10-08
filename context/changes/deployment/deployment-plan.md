@@ -318,12 +318,12 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
 | 4.1 repozytorium             | ✅ `lysio/trending-skins`, publiczne; pierwsze CI: `ci` ✅ `smoke` ✅ |
 | 4.2–4.4 husky, skrypty, Node | ✅ commit `ac3ab77`                                                   |
 | 4.5–4.6 Workers Builds       | ✅ podłączone przez człowieka (2026-10-08)                            |
-| 4.7 zgodność nazwy           | ⬜ potwierdzi pierwszy build w 4.12                                   |
+| 4.7 zgodność nazwy           | ✅ potwierdzone buildami w 4.12                                       |
 | 4.8 ochrona gałęzi           | ⏭️ **pominięte — decyzja człowieka 2026-10-08**, patrz krok           |
 | 4.9 bez build variables      | ✅ build variables puste                                              |
 | 4.10 sekrety GitHuba         | ⏭️ **zbędne** — patrz rewizja przy kroku                              |
 | 4.11 `verify-production.yml` | ✅ commit `7071f42`                                                   |
-| 4.12 test end-to-end         | ⬜                                                                    |
+| 4.12 test end-to-end         | ✅ PR #1 → produkcja `71d1ee14` @ 100%                                |
 
 **Granica agent / człowiek w praktyce.** Tryb auto Claude Code blokuje agentowi zarówno `wrangler deploy` (Faza 3), jak i `gh repo create … --push` (ustawienie zdalnego repo + wypchnięcie). Niezależnie od oznaczeń `[A]` w tym planie — **pierwsze wdrożenie, utworzenie repozytorium i push wykonuje człowiek**. Agent przygotowuje wszystko lokalnie i weryfikuje po fakcie.
 
@@ -377,7 +377,7 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
 
   Nie ma potrzeby podawać tokenu API — Workers Builds działa na uprawnieniach konta, nie przez `CLOUDFLARE_API_TOKEN`. Token o wąskim zakresie z 3.1 zostaje do ręcznych operacji z Twojej maszyny.
 
-- [ ] **[A] 4.7** Zweryfikuj w panelu, że `name` workera (`trending-skins`) zgadza się z `name` w `wrangler.jsonc`. **Niezgodność = build przechodzi, wdrożenie pada.**
+- [x] **[A] 4.7** Zweryfikuj w panelu, że `name` workera (`trending-skins`) zgadza się z `name` w `wrangler.jsonc`. **Niezgodność = build przechodzi, wdrożenie pada.**
 - [~] **[H] 4.8 Ochrona gałęzi `master`** — **POMINIĘTE (decyzja człowieka, 2026-10-08).** Konsekwencja przyjęta świadomie: każdy push na `master` trafia na produkcję przez Workers Builds niezależnie od wyniku `ci`/`smoke`. Jedyne zabezpieczenia, jakie zostają: dyscyplina „zmiany przez PR”, `verify-production` (raz na dobę lub ręcznie) i rollback w sekundach (3.11). Powrót do bramki: ten krok albo Deploy command → `npx wrangler versions upload` (4.16). Pierwotny opis: (GitHub → Settings → Branches): wymagaj PR przed merge, wymagaj zielonych statusów `ci` i `smoke`. **To jedyna bramka jakości, jaka istnieje w tym układzie** — Workers Builds nie zna wyników GitHub Actions i wdroży każdy push na `master` niezależnie od nich. **Wykonalne na GitHub Free tylko dlatego, że repozytorium jest publiczne** (patrz 4.1). Statusy `ci` i `smoke` pojawią się do wyboru dopiero po ich pierwszym uruchomieniu — czyli po pierwszym pushu.
 
 ### 4c. Sekrety — dwa osobne magazyny
@@ -414,7 +414,7 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
 
   Uwaga o `schedule` w GitHub Actions: ma własny rozrzut 5–15 minut i **wyłącza się po 60 dniach bezczynności repozytorium**. Jako monitoring wystarcza na MVP; nie jest to substytut zadania cyklicznego platformy. Realny monitoring dostępności przyjdzie wraz z cronem Cloudflare (darmowy, 5 wyzwalaczy na konto) — do tego czasu `workflow_dispatch` po każdej dłuższej przerwie jest tańszy niż jakikolwiek harmonogram.
 
-- [ ] **[A] 4.12 Sprawdź całość od końca do końca.** Gałąź → trywialny commit → PR. Obserwuj po kolei:
+- [x] **[A] 4.12 Sprawdź całość od końca do końca.** Gałąź → trywialny commit → PR. Obserwuj po kolei:
   1. GitHub Actions: `ci` i `smoke` zielone;
   2. Workers Builds: build gałęzi pobocznej → **adres podglądowy wklejony jako komentarz do PR**;
   3. otwórz ten adres, sprawdź `/api/health` = 200;
@@ -432,6 +432,13 @@ Dlaczego dopiero teraz, a nie zamiast Fazy 3: Workers Builds wymaga, żeby **naz
   ```
 
   Ustawione przez człowieka na **staging** `lqwpdqwptujpoxcogiwb` (nie produkcję — zgodnie z 3.7: podglądy mogą tworzyć użytkowników testowych). **Base config kopiuje się do podglądu tylko w chwili jego utworzenia** (zweryfikowane): podgląd `chore-e2e-workers-builds`, utworzony przed ustawieniem sekretów, po kolejnym buildzie (`4b220c8`) nadal miał `(none)` i 503; świeża gałąź `tmp-preview-secrets` utworzona po nich → sekrety obecne, `/api/health` **200** `configured:true, reachable:true`. Podgląd sprzed ustawienia sekretów naprawia się `wrangler preview secret put` dla tej gałęzi albo usunięciem podglądu (`wrangler preview delete`). Per-gałąź można je też nadpisać `wrangler preview secret put <KEY> --name <gałąź> --worker-name trending-skins`.
+
+  **Merge (2026-10-08 14:05 UTC, `a483b76`):** Workers Builds ✅ → nowa wersja `71d1ee14-92a9-4383-b133-06cddcd7fd90` @ 100% (Active Deployment). Sekrety produkcji przetrwały auto-deploy: `/` 200 bez banera · `/api/health` **200** `configured:true, reachable:true` · `/dashboard` 302 → `/auth/signin` · `sitemap-index.xml` 200 (3.10 dotarło na produkcję).
+
+  Trzy potknięcia przy okazji:
+  - **`smoke` padł na `master`** — `supabase/setup-cli@v1` z `version: latest` odpytuje API GitHuba o najnowsze wydanie i dostał _„rate limit exceeded”_. Nie kod; ponowienie przeszło. Naprawa: wersja przypięta na `2.117.0` (ta sama co lokalnie).
+  - **`verify-production.yml` nie został zarejestrowany przez GitHuba** mimo obecności na `master` (`gh workflow run` → 404; API listuje tylko `CI`). Rejestrację wymusza kolejny commit dotykający pliku — zrobione razem z naprawą `smoke`.
+  - **Workers Builds pominął jeden commit gałęzi PR** (`4bbc435`, brak check-runu i podglądu) — przyczyna nieustalona; build produkcyjny po merge'u ruszył normalnie. Obserwować.
 
 - [ ] **4.13 Gałąź awaryjna — build przechodzi, wdrożenie pada na niezgodności nazw.** Objaw: log budowania kończy się błędem na `wrangler deploy` przy kroku rozwiązywania workera. Przyczyna: `name` w `wrangler.jsonc` ≠ nazwa workera w panelu. Nie zmieniaj nazwy w panelu (utworzysz drugiego workera — patrz 1.4); popraw `wrangler.jsonc`.
 - [ ] **4.14 Gałąź awaryjna — build przechodzi, `/api/health` zwraca 503 `configured:false`.** Sekrety workera zniknęły albo nigdy nie dotarły. **Sekrety GitHuba, build variables Workers Builds, sekrety workera i sekrety podglądów (Preview base config, patrz 4.12) to cztery różne magazyny** — w runtime produkcji liczą się tylko sekrety workera, w runtime podglądów tylko Preview base config. `npx wrangler secret list --name trending-skins`, potem 3.4. Natychmiastowe cofnięcie: `npx wrangler rollback --name trending-skins`.
